@@ -21,7 +21,7 @@
       #container {
         position: relative;
       }
-      #video,#overlay {
+      #video,#overlay,#effect {
         position: absolute;
       }
       #video {
@@ -43,7 +43,7 @@
       <div id='container'>
         <video id='video'></video>
         <canvas id='overlay'></canvas>
-        <video id='effect' src='https://firebasestorage.googleapis.com/v0/b/walpurgisnacht-f96b1.appspot.com/o/nc195768.mp4?alt=media&token=5873c747-a5f7-4d29-a1ae-7fa8797b3450' autoplay></video>
+        <video id='effect' src='https://firebasestorage.googleapis.com/v0/b/walpurgisnacht-f96b1.appspot.com/o/nc195768.mp4?alt=media&token=5873c747-a5f7-4d29-a1ae-7fa8797b3450'></video>
       </div>
     </div>
 
@@ -63,19 +63,6 @@
           _stream.getVideoTracks()[0].stop();
           _stream = null;
         } else {
-          const container = document.getElementById('video');
-          video = document.getElementById('video');
-          overlay = document.getElementById('overlay');
-          effect = document.getElementById('effect');
-
-          // width, height を設定する          
-          container.width = SIZE.width;
-          container.height = SIZE.height;
-          video.width = SIZE.width;
-          video.height = SIZE.height;
-          overlay.width = SIZE.width;
-          overlay.height = SIZE.height;
-
           ctx = overlay.getContext('2d');       
           navigator.mediaDevices.getUserMedia({audio:false,video:SIZE})
             .then((stream) => {            
@@ -90,40 +77,49 @@
         }
       }
 
-      function drawWristPoint(wrist, ctx, color){
+      function drawWristPoint(wrist, ctx, color, size){
         // console.log('wrist', wrist.position);
         ctx.beginPath();
-        ctx.arc(wrist.position.x , wrist.position.y, 6, 0, 2 * Math.PI);
+        ctx.arc(wrist.position.x , wrist.position.y, size, 0, 2 * Math.PI);
         ctx.fillStyle = color;
         ctx.fill();
       }
 
       // エフェクト再生 ポーズ判定
-      function effectPose(leftWrist,leftElbow) {
+      function effectPose(rightWrist, leftElbow, size) {
         var result = false;
-        if((leftWrist[i].x - 50)  <= leftElbow.x && leftElbow.x <= (leftWrist[i].x + 50) &&
-           (leftWrist[i].y - 50) <= leftElbow.y && leftElbow.y <= (leftWrist[i].y + 50)){
+        if((leftElbow.position.x - size)  <= rightWrist.position.x && rightWrist.position.x <= (leftElbow.position.x + size) &&
+            (leftElbow.position.y - size) <= rightWrist.position.y && rightWrist.position.y <= (leftElbow.position.y + size)){
             result = true;
         }
+        // console.log('effectPose x', rightWrist.position.x, leftElbow.position.x);
+        // console.log('effectPose y', rightWrist.position.y, leftElbow.positiony);
         return result;
       }
 
       function dwawPose(pose) {
         console.log('pose', pose);
         ctx.clearRect(0, 0, 640, 480);
-        // ctx.drawImage(video, 0, 0, 640, 480);
+      　ctx.drawImage(video, 0, 0, 640, 480);
 
         [pose].forEach(({ score, keypoints }) => {
-            // keypoints[9] 左手首、keypoints[10] 右手首
-            drawWristPoint(keypoints[9],ctx, 'red');
-            drawWristPoint(keypoints[10],ctx, 'blue');
-            // 左肘 keypoints[8]
-            drawWristPoint(keypoints[8],ctx, '#0ff');
+            console.log('keypoints', keypoints);
 
-            // 左手首,左肘 が近くにあるか確認する
-            if (effectPose(keypoints[9],keypoints[8])) {
+            // keypoints[9] 左手首、keypoints[10] 右手首
+            // drawWristPoint(keypoints[9],ctx, 'red', 6);
+            drawWristPoint(keypoints[10],ctx, 'blue', 6);
+            // 左肘 keypoints[7], 右肘 keypoints[8]
+            drawWristPoint(keypoints[7],ctx, '#0ff', 20);
+            // drawWristPoint(keypoints[8],ctx, '#0ff');
+
+            // 右手首,左肘 が近くにあるか確認する
+            if (effectPose(keypoints[10], keypoints[7], 20)) {
               effect.style.display = 'block';
               effect.play();
+              setTimeout(()=>{
+                effect.style.display = 'none';
+                effect.pose();
+              }, 5000);
             }
         });
       }
@@ -144,6 +140,21 @@
       }
 
       function posenetOnLoad() {
+        const container = document.getElementById('video');
+        video = document.getElementById('video');
+        overlay = document.getElementById('overlay');
+        effect = document.getElementById('effect');
+
+        // width, height を設定する          
+        container.width = SIZE.width;
+        container.height = SIZE.height;
+        video.width = SIZE.width;
+        video.height = SIZE.height;
+        overlay.width = SIZE.width;
+        overlay.height = SIZE.height;          
+        effect.width = SIZE.width;
+        effect.height = SIZE.height;
+
         posenet.load().then((net) => {
           _net = net;
         });
