@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Welcome to Firebase Hosting</title>
+
+    <script defer src="/__/firebase/7.5.0/firebase-app.js"></script>
+    <script defer src="/__/firebase/7.5.0/firebase-auth.js"></script>
+    <script defer src="/__/firebase/7.5.0/firebase-database.js"></script>
+    <script defer src="/__/firebase/7.5.0/firebase-messaging.js"></script>
+    <script defer src="/__/firebase/7.5.0/firebase-storage.js"></script>
+    <script defer src="/__/firebase/init.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stats.js/r16/Stats.js"></script>
+
+    <script src="http://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="http://cdn.jsdelivr.net/npm/@tensorflow-models/posenet"></script>
+
+    <style>
+      #container {
+        position: relative;
+      }
+      #video,#overlay {
+        position: absolute;
+      }
+      #video {
+        display: none;
+      }
+      #overlay {
+        background-color: lightgreen; 
+      }
+      #effect {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="message">
+      <h2>Welcome</h2>
+      <div id='load'>---</div>
+      <button id='btn' onclick="clickBtn()">カメラ</button>
+      <div id='container'>
+        <video id='video'></video>
+        <canvas id='overlay'></canvas>
+        <video id='effect' src='https://firebasestorage.googleapis.com/v0/b/walpurgisnacht-f96b1.appspot.com/o/nc195768.mp4?alt=media&token=5873c747-a5f7-4d29-a1ae-7fa8797b3450' autoplay></video>
+      </div>
+    </div>
+
+    <script>
+      const stats = new Stats();
+
+      const SIZE = {width:640,height:480};
+      var _stream = null;
+      var _net = null;
+      var video = null;
+      var overlay = null,ctx = null;
+      var effect = null;
+
+      function clickBtn(){
+        console.log('clickBtn');
+        if (_stream){
+          _stream.getVideoTracks()[0].stop();
+          _stream = null;
+        } else {
+          const container = document.getElementById('video');
+          video = document.getElementById('video');
+          overlay = document.getElementById('overlay');
+          effect = document.getElementById('effect');
+
+          // width, height を設定する          
+          container.width = SIZE.width;
+          container.height = SIZE.height;
+          video.width = SIZE.width;
+          video.height = SIZE.height;
+          overlay.width = SIZE.width;
+          overlay.height = SIZE.height;
+
+          ctx = overlay.getContext('2d');       
+          navigator.mediaDevices.getUserMedia({audio:false,video:SIZE})
+            .then((stream) => {            
+              _stream = stream;
+              video.srcObject = stream;
+              video.play();
+              video.onloadedmetadata = () => {
+                // onloadedmetadata が発生後に 描画,姿勢推定 処理をする
+                drawLoop();
+              }
+          });
+        }
+      }
+
+      function drawWristPoint(wrist, ctx, color){
+        // console.log('wrist', wrist.position);
+        ctx.beginPath();
+        ctx.arc(wrist.position.x , wrist.position.y, 6, 0, 2 * Math.PI);
+        ctx.fillStyle = color;
+        ctx.fill();
+      }
+
+      // エフェクト再生 ポーズ判定
+      function effectPose(leftWrist,leftElbow) {
+        var result = false;
+        if((leftWrist[i].x - 50)  <= leftElbow.x && leftElbow.x <= (leftWrist[i].x + 50) &&
+           (leftWrist[i].y - 50) <= leftElbow.y && leftElbow.y <= (leftWrist[i].y + 50)){
+            result = true;
+        }
+        return result;
+      }
+
+      function dwawPose(pose) {
+        console.log('pose', pose);
+        ctx.clearRect(0, 0, 640, 480);
+        // ctx.drawImage(video, 0, 0, 640, 480);
+
+        [pose].forEach(({ score, keypoints }) => {
+            // keypoints[9] 左手首、keypoints[10] 右手首
+            drawWristPoint(keypoints[9],ctx, 'red');
+            drawWristPoint(keypoints[10],ctx, 'blue');
+            // 左肘 keypoints[8]
+            drawWristPoint(keypoints[8],ctx, '#0ff');
+
+            // 左手首,左肘 が近くにあるか確認する
+            if (effectPose(keypoints[9],keypoints[8])) {
+              effect.style.display = 'block';
+              effect.play();
+            }
+        });
+      }
+
+      async function drawLoop() {
+        stats.begin();
+        if (_stream === null) return;
+        
+        const imageScaleFactor = 0.2;
+        const flipHorizontal = true;
+        const outputStride = 16;
+        const pose = await _net.estimateSinglePose(video, imageScaleFactor, flipHorizontal, outputStride);
+        dwawPose(pose);
+        
+        stats.end();
+        // stats.update();
+        requestAnimationFrame(drawLoop);
+      }
+
+      function posenetOnLoad() {
+        posenet.load().then((net) => {
+          _net = net;
+        });
+      }
+
+      document.addEventListener('DOMContentLoaded', function() {
+        posenetOnLoad();
+
+        stats.domElement.style.position = 'absolute';
+        stats.domElement.style.left = '0px';
+        stats.domElement.style.top = '0px';
+        document.body.appendChild(stats.domElement);
+
+        try {
+          let app = firebase.app();
+          let features = ['auth', 'database', 'messaging', 'storage'].filter(feature => typeof app[feature] === 'function');
+          document.getElementById('load').innerHTML = `Firebase SDK loaded with ${features.join(', ')}`;
+        } catch (e) {
+          console.error(e);
+          document.getElementById('load').innerHTML = 'Error loading the Firebase SDK, check the console.';
+        }
+      });
+    </script>
+  </body>
+</html>
